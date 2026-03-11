@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Nifty 50 · OI Dashboard v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:      #05080f;
+  --s1:      #0a0f1e;
+  --s2:      #0f1629;
+  --border:  #162040;
+  --border2: #1e2d50;
+  --call:    #00d4aa;
+  --call2:   #00ffc8;
+  --put:     #ff3d6b;
+  --put2:    #ff7096;
+  --atm:     #fbbf24;
+  --atm2:    #fde68a;
+  --blue:    #3b82f6;
+  --blue2:   #93c5fd;
+  --text:    #e2eaf6;
+  --muted:   #4a5d7a;
+  --muted2:  #6b7fa0;
+  --gain:    #22c55e;
+  --loss:    #ef4444;
+  --neutral: #94a3b8;
+  --mono:    'IBM Plex Mono', monospace;
+  --sans:    'Outfit', sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--sans);
+  min-height:100vh;
+  overflow-x:hidden;
+}
+
+/* Ambient background glow */
+body::before{
+  content:'';position:fixed;inset:0;z-index:0;
+  background:
+    radial-gradient(ellipse 60% 40% at 20% 0%, rgba(0,212,170,.06) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 30% at 80% 100%, rgba(255,61,107,.05) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 50% at 50% 50%, rgba(59,130,246,.03) 0%, transparent 70%);
+  pointer-events:none;
+}
+
+/* Grid overlay */
+body::after{
+  content:'';position:fixed;inset:0;z-index:0;
+  background-image:
+    linear-gradient(rgba(59,130,246,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(59,130,246,.025) 1px,transparent 1px);
+  background-size:50px 50px;
+  pointer-events:none;
+}
+
+/* ── HEADER ── */
+header{
+  position:sticky;top:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 24px;
+  background:rgba(5,8,15,.85);
+  backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+}
+.logo{display:flex;align-items:center;gap:14px;}
+.logo-icon{
+  width:38px;height:38px;border-radius:10px;
+  background:linear-gradient(135deg,var(--call),var(--blue));
+  display:grid;place-items:center;
+  font-family:var(--mono);font-size:12px;font-weight:600;
+  color:#000;letter-spacing:-1px;
+  box-shadow:0 0 20px rgba(0,212,170,.3);
+}
+.logo-name{font-size:16px;font-weight:700;letter-spacing:.02em;}
+.logo-tagline{font-size:10px;color:var(--muted2);font-family:var(--mono);letter-spacing:.08em;margin-top:1px;}
+
+.header-center{display:flex;align-items:center;gap:8px;}
+
+/* Expiry selector */
+.expiry-select{
+  background:var(--s2);border:1px solid var(--border2);
+  color:var(--text);border-radius:8px;
+  padding:7px 14px;font-family:var(--mono);font-size:11px;
+  letter-spacing:.06em;cursor:pointer;outline:none;
+  transition:border-color .2s;
+}
+.expiry-select:hover{border-color:var(--blue);}
+
+.header-right{display:flex;align-items:center;gap:12px;}
+
+.badge{
+  padding:4px 10px;border-radius:6px;
+  font-size:10px;font-family:var(--mono);letter-spacing:.1em;font-weight:600;
+}
+.badge-live{background:rgba(0,212,170,.12);color:var(--call);border:1px solid rgba(0,212,170,.25);}
+.badge-sim {background:rgba(251,191,36,.12); color:var(--atm); border:1px solid rgba(251,191,36,.25);}
+
+.pulse-dot{
+  width:7px;height:7px;border-radius:50%;
+  background:var(--call);display:inline-block;margin-right:5px;
+  animation:pulse 1.8s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.3;transform:scale(.6);}}
+
+.ts{font-size:11px;color:var(--muted2);font-family:var(--mono);}
+
+.refresh-btn{
+  background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.25);
+  color:var(--blue2);border-radius:8px;padding:7px 16px;
+  cursor:pointer;font-family:var(--mono);font-size:11px;letter-spacing:.06em;
+  transition:all .2s;
+}
+.refresh-btn:hover{background:rgba(59,130,246,.2);border-color:var(--blue);}
+
+/* ── MAIN ── */
+main{position:relative;z-index:1;padding:18px 20px;max-width:1700px;margin:0 auto;}
+
+/* ── STAT CARDS ── */
+.stats-grid{
+  display:grid;
+  grid-template-columns:repeat(8,1fr);
+  gap:10px;margin-bottom:16px;
+}
+@media(max-width:1400px){.stats-grid{grid-template-columns:repeat(4,1fr);}}
+
+.stat{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:10px;padding:13px 15px;
+  position:relative;overflow:hidden;
+  transition:border-color .2s,transform .1s;
+}
+.stat:hover{border-color:var(--border2);transform:translateY(-1px);}
+.stat::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  border-radius:2px 2px 0 0;
+}
+.stat.c::before{background:linear-gradient(90deg,var(--call),transparent);}
+.stat.p::before{background:linear-gradient(90deg,var(--put),transparent);}
+.stat.a::before{background:linear-gradient(90deg,var(--atm),transparent);}
+.stat.b::before{background:linear-gradient(90deg,var(--blue),transparent);}
+.stat.n::before{background:linear-gradient(90deg,var(--neutral),transparent);}
+
+.stat-lbl{font-size:9px;color:var(--muted2);font-family:var(--mono);letter-spacing:.12em;text-transform:uppercase;margin-bottom:6px;}
+.stat-val{font-size:20px;font-weight:700;font-family:var(--mono);letter-spacing:-.5px;line-height:1;}
+.stat-val.vc{color:var(--call);}
+.stat-val.vp{color:var(--put);}
+.stat-val.va{color:var(--atm);}
+.stat-val.vb{color:var(--blue2);}
+.stat-sub{font-size:10px;color:var(--muted);margin-top:4px;}
+
+/* countdown */
+.cd-wrap{display:flex;align-items:center;gap:6px;}
+.cd-ring{
+  width:28px;height:28px;
+  transform:rotate(-90deg);
+}
+.cd-track{fill:none;stroke:var(--border2);stroke-width:3;}
+.cd-fill{fill:none;stroke:var(--blue);stroke-width:3;stroke-linecap:round;
+  stroke-dasharray:75.4;stroke-dashoffset:0;transition:stroke-dashoffset .9s linear;}
+.cd-num{font-size:18px;font-weight:700;font-family:var(--mono);color:var(--blue2);}
+
+/* ── S/R PANEL ── */
+.sr-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+.sr-panel{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:10px;padding:14px 16px;
+}
+.sr-title{font-size:10px;font-family:var(--mono);letter-spacing:.1em;color:var(--muted2);text-transform:uppercase;margin-bottom:10px;}
+.sr-items{display:flex;gap:8px;flex-wrap:wrap;}
+.sr-item{
+  display:flex;flex-direction:column;align-items:center;
+  padding:8px 14px;border-radius:8px;min-width:90px;
+}
+.sr-item.sup{background:rgba(0,212,170,.08);border:1px solid rgba(0,212,170,.2);}
+.sr-item.res{background:rgba(255,61,107,.08);border:1px solid rgba(255,61,107,.2);}
+.sr-strike{font-size:16px;font-weight:700;font-family:var(--mono);}
+.sr-item.sup .sr-strike{color:var(--call);}
+.sr-item.res .sr-strike{color:var(--put);}
+.sr-oi{font-size:9px;color:var(--muted2);font-family:var(--mono);margin-top:2px;}
+.sr-rank{font-size:8px;font-family:var(--mono);letter-spacing:.08em;margin-bottom:2px;opacity:.6;}
+
+/* ── LAYOUT: Charts + Table ── */
+.main-grid{display:grid;grid-template-columns:320px 1fr;gap:14px;margin-bottom:16px;}
+@media(max-width:1200px){.main-grid{grid-template-columns:1fr;}}
+
+/* ── PANELS ── */
+.panel{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:12px;overflow:hidden;
+}
+.panel-hdr{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;border-bottom:1px solid var(--border);
+}
+.panel-title{font-size:10px;font-family:var(--mono);letter-spacing:.1em;color:var(--muted2);text-transform:uppercase;}
+.panel-body{padding:14px;}
+
+/* PCR Gauge */
+.gauge-wrap{display:flex;flex-direction:column;align-items:center;padding:8px 0 4px;}
+.gauge-svg{width:200px;height:110px;}
+.pcr-big{font-size:36px;font-weight:700;font-family:var(--mono);text-align:center;margin:2px 0;}
+.pcr-tag{
+  padding:4px 16px;border-radius:20px;
+  font-size:11px;font-family:var(--mono);letter-spacing:.08em;font-weight:600;
+  margin-top:4px;
+}
+.bullish{background:rgba(0,212,170,.1);color:var(--call);border:1px solid rgba(0,212,170,.2);}
+.bearish{background:rgba(255,61,107,.1);color:var(--put); border:1px solid rgba(255,61,107,.2);}
+.neutral{background:rgba(251,191,36,.1); color:var(--atm);  border:1px solid rgba(251,191,36,.2);}
+.pcr-guide{
+  display:flex;gap:8px;justify-content:center;margin-top:10px;
+  font-size:9px;font-family:var(--mono);color:var(--muted);
+}
+
+/* ── OI TABLE ── */
+.table-tabs{display:flex;gap:6px;margin-bottom:10px;}
+.tab-btn{
+  padding:5px 12px;border-radius:6px;border:1px solid var(--border);
+  background:transparent;color:var(--muted2);font-family:var(--mono);font-size:10px;
+  cursor:pointer;letter-spacing:.06em;transition:all .15s;
+}
+.tab-btn.active{background:var(--s2);border-color:var(--border2);color:var(--text);}
+.tab-btn:hover:not(.active){border-color:var(--border2);}
+
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:11px;font-family:var(--mono);}
+
+thead tr{border-bottom:2px solid var(--border2);}
+thead th{
+  padding:8px 8px;text-align:right;
+  font-size:9px;letter-spacing:.09em;color:var(--muted);white-space:nowrap;
+}
+thead th.ch{color:rgba(0,212,170,.6);}
+thead th.ph{color:rgba(255,61,107,.6);}
+thead th.sh{text-align:center;color:var(--muted2);}
+
+tbody tr{border-bottom:1px solid rgba(22,32,64,.8);transition:background .1s;}
+tbody tr:hover{background:rgba(59,130,246,.04);}
+tbody tr.atm-row{
+  background:rgba(251,191,36,.05);
+  border-top:1px solid rgba(251,191,36,.2);
+  border-bottom:1px solid rgba(251,191,36,.2);
+}
+
+td{padding:6px 8px;text-align:right;white-space:nowrap;}
+td.sc{text-align:center;font-weight:700;}
+
+.atm-lbl{
+  display:inline-block;margin-left:4px;padding:1px 4px;
+  border-radius:3px;background:var(--atm);color:#000;
+  font-size:8px;letter-spacing:.05em;vertical-align:middle;
+}
+
+/* Signal badge */
+.sig{
+  display:inline-block;padding:2px 6px;border-radius:4px;
+  font-size:8px;letter-spacing:.05em;
+}
+.sig.bullish{background:rgba(0,212,170,.1);color:var(--call);}
+.sig.bearish{background:rgba(255,61,107,.1);color:var(--put);}
+.sig.neutral{background:rgba(148,163,184,.1);color:var(--neutral);}
+
+/* OI bar inline */
+.oi-cell{position:relative;min-width:70px;}
+.oi-bar{position:absolute;top:50%;transform:translateY(-50%);height:55%;border-radius:2px;opacity:.2;pointer-events:none;}
+.oi-bar.cb{right:0;background:var(--call);}
+.oi-bar.pb{left:0;background:var(--put);}
+.oi-num{position:relative;z-index:1;}
+
+/* color helpers */
+.cc{color:#a7f3d0;} .pc{color:#fca5a5;}
+.pos{color:var(--gain);} .neg{color:var(--loss);}
+.dim{color:var(--muted2);}
+.atm-s{color:var(--atm);}
+
+/* ── CHARTS ROW ── */
+.charts-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px;}
+@media(max-width:1200px){.charts-row{grid-template-columns:1fr 1fr;}}
+@media(max-width:800px){.charts-row{grid-template-columns:1fr;}}
+.chart-h{position:relative;height:200px;}
+
+/* ── GREEKS TABLE ── */
+.greeks-panel{margin-bottom:16px;}
+
+/* ── LOADING ── */
+.loader{
+  display:none;position:fixed;inset:0;z-index:200;
+  background:rgba(5,8,15,.75);backdrop-filter:blur(6px);
+  place-items:center;
+}
+.loader.show{display:grid;}
+.spin{
+  width:42px;height:42px;border-radius:50%;
+  border:3px solid var(--border2);border-top-color:var(--call);
+  animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* ── ERROR ── */
+.err{
+  display:none;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);
+  color:#fca5a5;border-radius:8px;padding:10px 14px;
+  font-size:11px;font-family:var(--mono);margin-bottom:12px;
+}
+.err.show{display:block;}
+
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px;}
+</style>
+</head>
+<body>
+<div class="loader" id="loader"><div class="spin"></div></div>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">N50</div>
+    <div>
+      <div class="logo-name">Nifty 50 &nbsp;·&nbsp; Open Interest Dashboard</div>
+      <div class="logo-tagline">NSE India · Options Chain · Greeks · OI Signals</div>
+    </div>
+  </div>
+
+  <div class="header-center">
+    <span style="font-size:10px;color:var(--muted2);font-family:var(--mono);">EXPIRY</span>
+    <select class="expiry-select" id="expirySelect" onchange="onExpiryChange()">
+      <option value="">Loading...</option>
+    </select>
+  </div>
+
+  <div class="header-right">
+    <span class="badge badge-sim" id="srcBadge">SIM</span>
+    <div class="badge badge-live"><span class="pulse-dot"></span>LIVE</div>
+    <span class="ts" id="ts">--</span>
+    <button class="refresh-btn" onclick="fetchData()">↻ REFRESH</button>
+  </div>
+</header>
+
+<main>
+  <div class="err" id="errBanner"></div>
+
+  <!-- ── STAT CARDS ── -->
+  <div class="stats-grid">
+    <div class="stat b">
+      <div class="stat-lbl">NIFTY SPOT</div>
+      <div class="stat-val vb" id="sSpot">—</div>
+      <div class="stat-sub" id="sExp">Expiry: —</div>
+    </div>
+    <div class="stat a">
+      <div class="stat-lbl">ATM STRIKE</div>
+      <div class="stat-val va" id="sAtm">—</div>
+      <div class="stat-sub">At the money</div>
+    </div>
+    <div class="stat a">
+      <div class="stat-lbl">MAX PAIN</div>
+      <div class="stat-val va" id="sMaxPain">—</div>
+      <div class="stat-sub">Buyer max loss</div>
+    </div>
+    <div class="stat c">
+      <div class="stat-lbl">TOTAL CALL OI</div>
+      <div class="stat-val vc" id="sTotalCall">—</div>
+      <div class="stat-sub">Contracts</div>
+    </div>
+    <div class="stat p">
+      <div class="stat-lbl">TOTAL PUT OI</div>
+      <div class="stat-val vp" id="sTotalPut">—</div>
+      <div class="stat-sub">Contracts</div>
+    </div>
+    <div class="stat n">
+      <div class="stat-lbl">PCR (OI)</div>
+      <div class="stat-val" id="sPcr" style="color:var(--text)">—</div>
+      <div class="stat-sub">Put-Call Ratio</div>
+    </div>
+    <div class="stat n">
+      <div class="stat-lbl">STRIKES SHOWN</div>
+      <div class="stat-val" style="color:var(--neutral)" id="sStrikes">—</div>
+      <div class="stat-sub">±5 from ATM</div>
+    </div>
+    <div class="stat b">
+      <div class="stat-lbl">NEXT REFRESH</div>
+      <div class="cd-wrap">
+        <svg class="cd-ring" viewBox="0 0 28 28">
+          <circle class="cd-track" cx="14" cy="14" r="12"/>
+          <circle class="cd-fill" id="cdRing" cx="14" cy="14" r="12"/>
+        </svg>
+        <span class="cd-num" id="cdNum">30</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SUPPORT & RESISTANCE ── -->
+  <div class="sr-row">
+    <div class="sr-panel">
+      <div class="sr-title">🟢 Key Support Levels (Highest PUT OI)</div>
+      <div class="sr-items" id="srSupport">—</div>
+    </div>
+    <div class="sr-panel">
+      <div class="sr-title">🔴 Key Resistance Levels (Highest CALL OI)</div>
+      <div class="sr-items" id="srResistance">—</div>
+    </div>
+  </div>
+
+  <!-- ── MAIN GRID: PCR + Table ── -->
+  <div class="main-grid">
+
+    <!-- Left: PCR Gauge + OI donut -->
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div class="panel">
+        <div class="panel-hdr"><span class="panel-title">PCR Gauge</span></div>
+        <div class="panel-body">
+          <div class="gauge-wrap">
+            <svg class="gauge-svg" viewBox="0 0 200 110">
+              <path d="M 20 105 A 80 80 0 0 1 180 105" fill="none" stroke="#162040" stroke-width="14" stroke-linecap="round"/>
+              <path id="gArc" d="M 20 105 A 80 80 0 0 1 180 105" fill="none" stroke="#fbbf24" stroke-width="14" stroke-linecap="round"
+                stroke-dasharray="251" stroke-dashoffset="126"/>
+              <line id="gNeedle" x1="100" y1="105" x2="100" y2="30" stroke="#e2eaf6" stroke-width="3" stroke-linecap="round" transform-origin="100 105"/>
+              <circle cx="100" cy="105" r="5" fill="#e2eaf6"/>
+              <text x="10" y="100" fill="#ff3d6b" font-size="9" font-family="IBM Plex Mono">BEAR</text>
+              <text x="152" y="100" fill="#00d4aa" font-size="9" font-family="IBM Plex Mono">BULL</text>
+            </svg>
+            <div class="pcr-big" id="pcrBig">—</div>
+            <span class="pcr-tag neutral" id="pcrTag">NEUTRAL</span>
+            <div class="pcr-guide">
+              <span style="color:var(--put)">＜0.8 Bear</span>
+              <span>|</span>
+              <span>0.8–1.2 Neutral</span>
+              <span>|</span>
+              <span style="color:var(--call)">＞1.2 Bull</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-hdr"><span class="panel-title">Call vs Put OI</span></div>
+        <div class="panel-body"><div class="chart-h"><canvas id="donutChart"></canvas></div></div>
+      </div>
+    </div>
+
+    <!-- Right: Option chain table -->
+    <div class="panel">
+      <div class="panel-hdr">
+        <span class="panel-title">Option Chain · ±5 Strikes from ATM</span>
+        <div class="table-tabs">
+          <button class="tab-btn active" id="tabOI"      onclick="switchTab('oi')">OI</button>
+          <button class="tab-btn"        id="tabGreeks"  onclick="switchTab('greeks')">Greeks</button>
+          <button class="tab-btn"        id="tabSignals" onclick="switchTab('signals')">Signals</button>
+        </div>
+      </div>
+      <div style="padding:12px 14px 0;">
+        <div class="table-wrap">
+          <table id="chainTable">
+            <thead id="chainHead"></thead>
+            <tbody id="chainBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CHARTS ROW ── -->
+  <div class="charts-row">
+    <div class="panel">
+      <div class="panel-hdr"><span class="panel-title">OI by Strike</span></div>
+      <div class="panel-body"><div class="chart-h" style="height:220px;"><canvas id="oiBarChart"></canvas></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-hdr"><span class="panel-title">IV Skew · Call vs Put</span></div>
+      <div class="panel-body"><div class="chart-h" style="height:220px;"><canvas id="ivChart"></canvas></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-hdr"><span class="panel-title">OI Change · Buildup / Unwinding</span></div>
+      <div class="panel-body"><div class="chart-h" style="height:220px;"><canvas id="oiChgChart"></canvas></div></div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+let currentTab = 'oi';
+let currentData = null;
+let cdSecs = 30, cdTimer = null, esConn = null;
+
+// ── Formatting ───────────────────────────────────────────────────────────────
+const fmt = n => {
+  if (n === null || n === undefined) return '—';
+  const a = Math.abs(n);
+  if (a >= 1e7) return (n/1e7).toFixed(2)+'Cr';
+  if (a >= 1e5) return (n/1e5).toFixed(2)+'L';
+  if (a >= 1e3) return (n/1e3).toFixed(1)+'K';
+  return n.toLocaleString('en-IN');
+};
+const fn  = n => (n||n===0) ? n.toLocaleString('en-IN',{maximumFractionDigits:2}) : '—';
+const sign = n => n>=0 ? '+' : '';
+
+// ── Charts ───────────────────────────────────────────────────────────────────
+Chart.defaults.color = '#4a5d7a';
+Chart.defaults.borderColor = '#162040';
+Chart.defaults.font.family = "'IBM Plex Mono', monospace";
+Chart.defaults.font.size = 9;
+
+let donutChart, oiBarChart, ivChart, oiChgChart;
+
+function initCharts() {
+  const g = { color:'rgba(22,32,64,.8)', drawBorder:false };
+
+  donutChart = new Chart(document.getElementById('donutChart'), {
+    type:'doughnut',
+    data:{ labels:['Call OI','Put OI'], datasets:[{
+      data:[0,0],
+      backgroundColor:['rgba(0,212,170,.65)','rgba(255,61,107,.65)'],
+      borderColor:['#00d4aa','#ff3d6b'], borderWidth:1, hoverOffset:4
+    }]},
+    options:{
+      responsive:true, maintainAspectRatio:false, cutout:'70%',
+      plugins:{ legend:{ position:'bottom', labels:{ padding:14, boxWidth:10 }},
+        tooltip:{ callbacks:{ label:c=>` ${c.label}: ${fmt(c.raw)}` }}}
+    }
+  });
+
+  oiBarChart = new Chart(document.getElementById('oiBarChart'), {
+    type:'bar',
+    data:{ labels:[], datasets:[
+      { label:'Call OI', data:[], backgroundColor:'rgba(0,212,170,.5)', borderRadius:3 },
+      { label:'Put OI',  data:[], backgroundColor:'rgba(255,61,107,.5)', borderRadius:3 },
+    ]},
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false },
+        tooltip:{ callbacks:{ label:c=>` ${c.dataset.label}: ${fmt(c.raw)}` }}},
+      scales:{
+        x:{ grid:g, ticks:{ callback:v=>fmt(v) }},
+        y:{ grid:{ display:false }, ticks:{ font:{ size:9 }}}
+      }
+    }
+  });
+
+  ivChart = new Chart(document.getElementById('ivChart'), {
+    type:'line',
+    data:{ labels:[], datasets:[
+      { label:'Call IV', data:[], borderColor:'#00d4aa', backgroundColor:'rgba(0,212,170,.06)', fill:true, tension:.4, pointRadius:3, pointHoverRadius:5 },
+      { label:'Put IV',  data:[], borderColor:'#ff3d6b', backgroundColor:'rgba(255,61,107,.06)', fill:true, tension:.4, pointRadius:3, pointHoverRadius:5 },
+    ]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'bottom', labels:{ padding:12, boxWidth:8 }}},
+      scales:{
+        x:{ grid:g, ticks:{ maxTicksLimit:8 }},
+        y:{ grid:g, title:{ display:true, text:'IV %', color:'#4a5d7a' }}
+      }
+    }
+  });
+
+  oiChgChart = new Chart(document.getElementById('oiChgChart'), {
+    type:'bar',
+    data:{ labels:[], datasets:[
+      { label:'Call OI Δ', data:[], backgroundColor: ctx => ctx.raw>=0?'rgba(0,212,170,.6)':'rgba(255,61,107,.5)', borderRadius:2 },
+      { label:'Put OI Δ',  data:[], backgroundColor: ctx => ctx.raw>=0?'rgba(0,212,170,.35)':'rgba(255,61,107,.35)', borderRadius:2 },
+    ]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'bottom', labels:{ padding:12, boxWidth:8 }},
+        tooltip:{ callbacks:{ label:c=>` ${c.dataset.label}: ${fmt(c.raw)}` }}},
+      scales:{
+        x:{ grid:{ display:false }, ticks:{ maxTicksLimit:8 }},
+        y:{ grid:g, ticks:{ callback:v=>fmt(v) }}
+      }
+    }
+  });
+}
+
+// ── Filter records: ±5 from ATM ───────────────────────────────────────────────
+function filterRecords(records, atm) {
+  const sorted = [...records].sort((a,b) => a.strike - b.strike);
+  const atmIdx = sorted.findIndex(r => r.strike === atm);
+  if (atmIdx === -1) return sorted.slice(0, 11);
+  const start = Math.max(0, atmIdx - 5);
+  const end   = Math.min(sorted.length, atmIdx + 6);
+  return sorted.slice(start, end);
+}
+
+// ── Update UI ─────────────────────────────────────────────────────────────────
+function updateUI(data) {
+  currentData = data;
+
+  // Header
+  document.getElementById('ts').textContent = data.timestamp;
+  const sb = document.getElementById('srcBadge');
+  sb.textContent = data.source === 'live' ? 'LIVE' : 'SIM';
+  sb.className   = data.source === 'live' ? 'badge badge-live' : 'badge badge-sim';
+
+  // Expiry dropdown
+  if (data.expiry_list && data.expiry_list.length) {
+    const sel = document.getElementById('expirySelect');
+    const cur = sel.value;
+    sel.innerHTML = data.expiry_list.map(e =>
+      `<option value="${e}" ${e===data.expiry?'selected':''}>${e}</option>`
+    ).join('');
+    if (!cur) sel.value = data.expiry;
+  }
+
+  // Stats
+  document.getElementById('sSpot').textContent    = fn(data.spot);
+  document.getElementById('sAtm').textContent     = (data.atm||0).toLocaleString('en-IN');
+  document.getElementById('sMaxPain').textContent = (data.max_pain||0).toLocaleString('en-IN');
+  document.getElementById('sTotalCall').textContent = fmt(data.total_call_oi);
+  document.getElementById('sTotalPut').textContent  = fmt(data.total_put_oi);
+  document.getElementById('sExp').textContent = 'Expiry: ' + data.expiry;
+
+  // PCR
+  const pcr = data.pcr || 0;
+  document.getElementById('sPcr').textContent  = pcr.toFixed(3);
+  document.getElementById('pcrBig').textContent = pcr.toFixed(3);
+
+  let sentCls, sentTxt, pcrClr;
+  if      (pcr < 0.8) { sentCls='bearish'; sentTxt='BEARISH'; pcrClr='#ff3d6b'; }
+  else if (pcr > 1.2) { sentCls='bullish'; sentTxt='BULLISH'; pcrClr='#00d4aa'; }
+  else                { sentCls='neutral'; sentTxt='NEUTRAL';  pcrClr='#fbbf24'; }
+
+  const pt = document.getElementById('pcrTag');
+  pt.className = 'pcr-tag ' + sentCls; pt.textContent = sentTxt;
+  document.getElementById('pcrBig').style.color = pcrClr;
+
+  // Gauge
+  const ang = (Math.min(2,Math.max(0,pcr))/2)*180 - 90;
+  document.getElementById('gNeedle').setAttribute('transform',`rotate(${ang},100,105)`);
+  const off = (251*(1 - Math.min(2,Math.max(0,pcr))/2)).toFixed(1);
+  document.getElementById('gArc').setAttribute('stroke-dashoffset', off);
+  document.getElementById('gArc').setAttribute('stroke', pcrClr);
+
+  // Filter ±5 strikes
+  const recs = filterRecords(data.records || [], data.atm);
+  document.getElementById('sStrikes').textContent = recs.length + ' strikes';
+
+  // S/R
+  const sr = data.support_resistance || {};
+  renderSR(sr.supports||[], sr.resistances||[]);
+
+  // Charts
+  const labels   = recs.map(r => r.strike);
+  const callOIs  = recs.map(r => r.call_oi);
+  const putOIs   = recs.map(r => r.put_oi);
+
+  donutChart.data.datasets[0].data = [data.total_call_oi, data.total_put_oi];
+  donutChart.update('none');
+
+  oiBarChart.data.labels = labels;
+  oiBarChart.data.datasets[0].data = callOIs;
+  oiBarChart.data.datasets[1].data = putOIs;
+  oiBarChart.update('none');
+
+  ivChart.data.labels = labels;
+  ivChart.data.datasets[0].data = recs.map(r=>r.call_iv);
+  ivChart.data.datasets[1].data = recs.map(r=>r.put_iv);
+  ivChart.update('none');
+
+  oiChgChart.data.labels = labels;
+  oiChgChart.data.datasets[0].data = recs.map(r=>r.call_oi_chg);
+  oiChgChart.data.datasets[1].data = recs.map(r=>r.put_oi_chg);
+  oiChgChart.update('none');
+
+  // Table
+  renderTable(recs, data.atm);
+}
+
+function renderSR(supports, resistances) {
+  const ranks = ['1st','2nd','3rd'];
+  document.getElementById('srSupport').innerHTML = supports.map((s,i) => `
+    <div class="sr-item sup">
+      <div class="sr-rank">${ranks[i]||''}</div>
+      <div class="sr-strike">${s.strike.toLocaleString('en-IN')}</div>
+      <div class="sr-oi">PUT OI: ${fmt(s.oi)}</div>
+    </div>`).join('') || '<span style="color:var(--muted);font-size:11px;">—</span>';
+
+  document.getElementById('srResistance').innerHTML = resistances.map((r,i) => `
+    <div class="sr-item res">
+      <div class="sr-rank">${ranks[i]||''}</div>
+      <div class="sr-strike">${r.strike.toLocaleString('en-IN')}</div>
+      <div class="sr-oi">CALL OI: ${fmt(r.oi)}</div>
+    </div>`).join('') || '<span style="color:var(--muted);font-size:11px;">—</span>';
+}
+
+// ── Tab rendering ─────────────────────────────────────────────────────────────
+function switchTab(t) {
+  currentTab = t;
+  ['oi','greeks','signals'].forEach(id => {
+    document.getElementById('tab'+id.charAt(0).toUpperCase()+id.slice(1)).classList.toggle('active', id===t);
+  });
+  if (currentData) renderTable(filterRecords(currentData.records||[], currentData.atm), currentData.atm);
+}
+
+function renderTable(recs, atm) {
+  const head = document.getElementById('chainHead');
+  const body = document.getElementById('chainBody');
+  const maxOI = Math.max(...recs.map(r=>Math.max(r.call_oi,r.put_oi)), 1);
+
+  if (currentTab === 'oi') {
+    head.innerHTML = `<tr>
+      <th class="ch">OI Chg</th><th class="ch">OI</th><th class="ch">IV%</th>
+      <th class="ch">Vol</th><th class="ch">LTP</th>
+      <th class="sh">STRIKE</th>
+      <th class="ph">LTP</th><th class="ph">Vol</th>
+      <th class="ph">IV%</th><th class="ph">OI</th><th class="ph">OI Chg</th>
+    </tr>`;
+    body.innerHTML = recs.map(r => {
+      const isATM = r.strike === atm;
+      const cbW = Math.round(r.call_oi/maxOI*100), pbW = Math.round(r.put_oi/maxOI*100);
+      return `<tr class="${isATM?'atm-row':''}">
+        <td class="cc ${r.call_oi_chg>=0?'pos':'neg'}">${sign(r.call_oi_chg)}${fmt(r.call_oi_chg)}</td>
+        <td class="cc oi-cell"><div class="oi-bar cb" style="width:${cbW}%"></div><span class="oi-num">${fmt(r.call_oi)}</span></td>
+        <td class="cc">${r.call_iv||'—'}</td>
+        <td class="dim">${fmt(r.call_volume)}</td>
+        <td class="cc">${fn(r.call_ltp)}</td>
+        <td class="sc ${isATM?'atm-s':''}">${r.strike.toLocaleString('en-IN')}${isATM?'<span class="atm-lbl">ATM</span>':''}</td>
+        <td class="pc">${fn(r.put_ltp)}</td>
+        <td class="dim">${fmt(r.put_volume)}</td>
+        <td class="pc">${r.put_iv||'—'}</td>
+        <td class="pc oi-cell"><div class="oi-bar pb" style="width:${pbW}%"></div><span class="oi-num">${fmt(r.put_oi)}</span></td>
+        <td class="pc ${r.put_oi_chg>=0?'pos':'neg'}">${sign(r.put_oi_chg)}${fmt(r.put_oi_chg)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  else if (currentTab === 'greeks') {
+    head.innerHTML = `<tr>
+      <th class="ch">Δ Delta</th><th class="ch">Γ Gamma</th>
+      <th class="ch">Θ Theta</th><th class="ch">ν Vega</th>
+      <th class="sh">STRIKE</th>
+      <th class="ph">Δ Delta</th><th class="ph">Γ Gamma</th>
+      <th class="ph">Θ Theta</th><th class="ph">ν Vega</th>
+    </tr>`;
+    body.innerHTML = recs.map(r => {
+      const isATM = r.strike === atm;
+      return `<tr class="${isATM?'atm-row':''}">
+        <td class="cc">${r.call_delta}</td>
+        <td class="cc">${r.call_gamma}</td>
+        <td class="cc ${r.call_theta<0?'neg':''}">${r.call_theta}</td>
+        <td class="cc">${r.call_vega}</td>
+        <td class="sc ${isATM?'atm-s':''}">${r.strike.toLocaleString('en-IN')}${isATM?'<span class="atm-lbl">ATM</span>':''}</td>
+        <td class="pc">${r.put_delta}</td>
+        <td class="pc">${r.put_gamma}</td>
+        <td class="pc ${r.put_theta<0?'neg':''}">${r.put_theta}</td>
+        <td class="pc">${r.put_vega}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  else if (currentTab === 'signals') {
+    head.innerHTML = `<tr>
+      <th class="ch">Call OI Chg</th><th class="ch">Call IV</th><th class="ch">Call LTP</th>
+      <th class="sh">STRIKE</th><th class="sh">SIGNAL</th>
+      <th class="ph">Put LTP</th><th class="ph">Put IV</th><th class="ph">Put OI Chg</th>
+    </tr>`;
+    body.innerHTML = recs.map(r => {
+      const isATM = r.strike === atm;
+      const sig = r.signal || {label:'—', color:'neutral'};
+      return `<tr class="${isATM?'atm-row':''}">
+        <td class="cc ${r.call_oi_chg>=0?'pos':'neg'}">${sign(r.call_oi_chg)}${fmt(r.call_oi_chg)}</td>
+        <td class="cc">${r.call_iv||'—'}%</td>
+        <td class="cc">${fn(r.call_ltp)}</td>
+        <td class="sc ${isATM?'atm-s':''}">${r.strike.toLocaleString('en-IN')}${isATM?'<span class="atm-lbl">ATM</span>':''}</td>
+        <td style="text-align:center;"><span class="sig ${sig.color}">${sig.label}</span></td>
+        <td class="pc">${fn(r.put_ltp)}</td>
+        <td class="pc">${r.put_iv||'—'}%</td>
+        <td class="pc ${r.put_oi_chg>=0?'pos':'neg'}">${sign(r.put_oi_chg)}${fmt(r.put_oi_chg)}</td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+// ── Expiry change ─────────────────────────────────────────────────────────────
+function onExpiryChange() {
+  fetchData();
+}
+
+// ── Fetch ─────────────────────────────────────────────────────────────────────
+async function fetchData() {
+  document.getElementById('loader').classList.add('show');
+  document.getElementById('errBanner').classList.remove('show');
+  resetCD();
+  const expiry = document.getElementById('expirySelect').value;
+  try {
+    const res  = await fetch(`/api/oi${expiry ? '?expiry='+encodeURIComponent(expiry) : ''}`);
+    const json = await res.json();
+    if (json.ok) updateUI(json.data);
+    else throw new Error('API returned error');
+  } catch(e) {
+    const b = document.getElementById('errBanner');
+    b.textContent = '⚠  NSE unreachable — showing simulated data. ' + e.message;
+    b.classList.add('show');
+  } finally {
+    document.getElementById('loader').classList.remove('show');
+  }
+}
+
+// ── Countdown ─────────────────────────────────────────────────────────────────
+const circumference = 2 * Math.PI * 12; // r=12 → ≈75.4
+function resetCD() {
+  cdSecs = 30;
+  clearInterval(cdTimer);
+  cdTimer = setInterval(() => {
+    cdSecs--;
+    document.getElementById('cdNum').textContent = cdSecs;
+    const ring = document.getElementById('cdRing');
+    ring.style.strokeDashoffset = circumference * (1 - cdSecs/30);
+    if (cdSecs <= 0) fetchData();
+  }, 1000);
+}
+
+// ── SSE ───────────────────────────────────────────────────────────────────────
+function connectSSE() {
+  const expiry = document.getElementById('expirySelect').value;
+  if (esConn) esConn.close();
+  esConn = new EventSource(`/api/stream${expiry?'?expiry='+encodeURIComponent(expiry):''}`);
+  esConn.onmessage = e => {
+    try { updateUI(JSON.parse(e.data)); resetCD(); } catch(_) {}
+  };
+  esConn.onerror = () => {
+    console.warn('SSE error — falling back to polling');
+    esConn.close();
+    setInterval(fetchData, 30000);
+  };
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  initCharts();
+  fetchData().then(() => connectSSE());
+});
+</script>
+</body>
+</html>
